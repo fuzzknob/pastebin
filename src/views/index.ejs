@@ -29,7 +29,6 @@
     const text = document.getElementById('text')
 
     text.addEventListener('input', () => {
-      console.log(text.value)
       socket.emit('paste', text.value)
     })
   </script>
