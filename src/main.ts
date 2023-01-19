@@ -2,6 +2,7 @@ import express from 'express'
 import path from 'path'
 import dayjs from 'dayjs'
 import http from 'http'
+import { v4 as uuidv4 } from 'uuid'
 import 'dotenv/config'
 import { Server } from 'socket.io'
 
@@ -19,7 +20,7 @@ let data: {
 } | null = null
 
 expressServer.get('/', (req, res) => {
-  res.render('index', { content: data ? data.content : '', })
+  res.render('index', { content: data ? data.content : '', uuid: uuidv4() })
 })
 
 function wait(time: number) {
@@ -42,12 +43,12 @@ const httpServer = http.createServer(expressServer)
 const io = new Server(httpServer)
 
 io.on('connection', (socket) => {
-  socket.on('paste', (content: string) => {
-    if (!content) return data = null
-    data = {
+  socket.on('PASTE_EVENT', ({ id, content }: { id: string, content: string }) => {
+    data = content ? {
       content,
       expiryDate: dayjs().add(EXPIRE_AFTER_SECONDS, 'minutes')
-    }
+    } : null
+    io.emit('INPUT_EVENT', { id, content })
   })
 })
 
