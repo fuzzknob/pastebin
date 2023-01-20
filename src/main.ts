@@ -46,7 +46,7 @@ io.on('connection', (socket) => {
   socket.on('PASTE_EVENT', ({ id, content }: { id: string, content: string }) => {
     data = content ? {
       content,
-      expiryDate: dayjs().add(EXPIRE_AFTER_SECONDS, 'minutes')
+      expiryDate: dayjs().add(EXPIRE_AFTER_SECONDS, 'seconds')
     } : null
     io.emit('INPUT_EVENT', { id, content })
   })
