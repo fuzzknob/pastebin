@@ -26,6 +26,7 @@ pub fn get_env(key: &str) -> Option<String> {
 struct AppState {
     content: Option<String>,
     expiry: Option<DateTime<Utc>>,
+    persistent_content: Option<String>,
 }
 
 impl Default for AppState {
@@ -33,6 +34,7 @@ impl Default for AppState {
         Self {
             content: None,
             expiry: None,
+            persistent_content: None,
         }
     }
 }
@@ -43,6 +45,7 @@ type Db = Arc<RwLock<AppState>>;
 struct Message {
     id: String,
     content: String,
+    persistent: bool,
 }
 
 #[tokio::main]
@@ -56,6 +59,7 @@ async fn main() {
 
     let app = Router::new()
         .route("/", get(index))
+        .route("/persistent", get(persistent))
         .with_state(db)
         .layer(layer);
 
@@ -71,17 +75,36 @@ fn on_connect(socket: SocketRef) {
         |io: SocketRef,
          Data::<Message>(message),
          socketioxide::extract::State(db): socketioxide::extract::State<Db>| async move {
+            io.broadcast()
+                .emit("TEXT_BROADCAST_PERSISTENT", &message)
+                .await
+                .ok();
+
             let mut state = db.write().await;
+
+            if message.persistent {
+                state.persistent_content = if !message.content.is_empty() {
+                    Some(message.content)
+                } else {
+                    None
+                };
+
+                return;
+            }
+
+            io.broadcast().emit("TEXT_BROADCAST", &message).await.ok();
+
             let expiry_duration = get_env("PASTE_EXPIRES_AFTER_SECONDS")
                 .unwrap_or("900".to_string())
                 .parse::<i64>()
                 .unwrap_or(900);
-            io.broadcast().emit("TEXT_BROADCAST", &message).await.ok();
+
             state.content = if !message.content.is_empty() {
                 Some(message.content)
             } else {
                 None
             };
+
             state.expiry = Some(Utc::now() + Duration::seconds(expiry_duration));
         },
     );
@@ -92,6 +115,7 @@ fn on_connect(socket: SocketRef) {
 struct IndexPage {
     uuid: String,
     content: String,
+    persistent: bool,
 }
 
 async fn index(State(db): State<Db>) -> impl IntoResponse {
@@ -102,9 +126,22 @@ async fn index(State(db): State<Db>) -> impl IntoResponse {
         }
     }
     let template = IndexPage {
-        content: state.content.clone().unwrap_or("".to_string()),
         uuid: Uuid::new_v4().to_string(),
+        persistent: false,
+        content: state.content.clone().unwrap_or("".to_string()),
     };
+
+    HtmlTemplate(template)
+}
+
+async fn persistent(State(db): State<Db>) -> impl IntoResponse {
+    let state = db.read().await;
+    let template = IndexPage {
+        uuid: Uuid::new_v4().to_string(),
+        persistent: true,
+        content: state.persistent_content.clone().unwrap_or("".to_string()),
+    };
+
     HtmlTemplate(template)
 }
 

@@ -1,8 +1,12 @@
 <html lang="en">
     <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Paste Bin</title>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        {% if persistent %}
+            <title>Persistent Pastebin</title>
+        {% else %}
+            <title>Pastebin</title>
+        {% endif %}
         <style>
             body {
                 margin: 0;
@@ -34,29 +38,24 @@
     </head>
 
     <body>
-        <textarea
-            autofocus
-            name="paste"
-            id="text"
-            placeholder="Paste Bin"
-            spellcheck="false"
-        >
-{{ content }}</textarea
-        >
+        <textarea autofocus name="paste" id="text" placeholder="Paste Bin" spellcheck="false">{{ content }}</textarea>
         <script type="module">
             import { io } from "https://cdn.socket.io/4.8.1/socket.io.esm.min.js";
             const uuid = "{{ uuid }}";
+            const isPersistent = {{ persistent }};
             const socket = io();
             const text = document.getElementById("text");
 
-            socket.on("TEXT_BROADCAST", ({ id, content }) => {
+            const channel = isPersistent ? "TEXT_BROADCAST_PERSISTENT" : "TEXT_BROADCAST";
+
+            socket.on(channel, ({ id, content, persistent }) => {
+                if (isPersistent && !persistent) return;
                 if (uuid !== id) text.value = content;
             });
 
             text.addEventListener("input", () => {
-                socket.emit("TEXT_INPUT", { id: uuid, content: text.value });
+                socket.emit("TEXT_INPUT", { id: uuid, content: text.value, persistent: isPersistent });
             });
         </script>
-        t
     </body>
 </html>
